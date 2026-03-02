@@ -1,0 +1,1387 @@
+openapi: 3.0.1
+info:
+  title: Smartly Device Service API
+  description: |
+    API for managing smart home devices in Smartly system
+
+    ## API Design Guidelines
+    This API follows the Smartly API Design Guidelines:
+
+    ### 1. Загальний підхід
+    - **Гібридний стиль**: CRUD операції використовують REST, команди використовують RPC-стиль
+
+    - **Базовий URL**: `https://api.smartly.com/v1`
+    - **Формат даних**: JSON для REST, Protocol Buffers для gRPC (внутрішня комунікація)
+    - **Аутентифікація**: Bearer Token (JWT) в заголовку `Authorization`
+
+    ### 2. Організація API та Ресурси
+    - **Ресурси як іменники**: `/devices`, `/rooms`, `/types`
+
+    - **Множина для колекцій**: `/devices` (список), `/devices/{id}` (конкретний)
+    - **Kebab-case для складних назв**: `/energy-savings-mode`
+    - **Ієрархія ресурсів**: `/rooms/{roomId}/devices`
+    - **RPC-стиль для команд**: `/devices/{id}/commands`
+
+    ### 3. HTTP Методи
+    - `GET` - отримання ресурсу/списку
+
+    - `POST` - створення ресурсу або виконання команди
+    - `PUT` - повне оновлення ресурсу
+    - `PATCH` - часткове оновлення ресурсу
+    - `DELETE` - видалення ресурсу
+
+    ### 4. Параметри запитів
+    - **Пагінація**: `page`, `limit` (max 100)
+
+    - **Фільтрація**: query параметри (`?room=living&type=light`)
+    - **Оператори фільтрації**: `_gt`, `_lt`, `_gte`, `_lte`, `_ne`, `_in`
+    - **Сортування**: `sort=field` (зростання), `sort=-field` (спадання)
+    - **Пошук**: `search=text`
+
+    ### 5. Формат відповідей
+    - **Успіх**: `{"ok": true, "data": {...}, "pagination": {...}}`
+
+    - **Помилка**: `{"ok": false, "error": "code", "message": "text", "details": {...}}`
+
+    ### 6. HTTP Статус-коди
+    - `200 OK` - успішне виконання
+
+    - `201 Created` - ресурс створено
+    - `204 No Content` - успішне видалення
+    - `400 Bad Request` - помилка валідації
+    - `401 Unauthorized` - відсутня автентифікація
+    - `403 Forbidden` - недостатньо прав
+    - `404 Not Found` - ресурс не знайдено
+    - `409 Conflict` - конфлікт стану
+    - `422 Unprocessable Entity` - логічна помилка
+    - `429 Too Many Requests` - перевищено ліміт
+    - `500 Internal Server Error` - помилка сервера
+
+    ### 7. Версіонування
+    - Версія в URL: `/v1/`, `/v2/`
+
+  version: 1.0.0
+  contact:
+    name: Smartly Team
+    url: https://smartly.com
+    email: api@smartly.com
+  license:
+    name: Private API
+    url: https://smartly.com/license
+
+servers:
+  - url: https://api.smartly.com/v1
+    description: Production server
+  - url: https://staging-api.smartly.com/v1
+    description: Staging server
+  - url: http://localhost:8080/api/v1
+    description: Local development
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Devices
+    description: Device management operations (CRUD)
+  - name: Device Commands
+    description: RPC-style commands for devices
+  - name: Rooms
+    description: Room-based device operations
+  - name: Health
+    description: Service health checks
+
+paths:
+  /devices:
+    get:
+      tags:
+        - Devices
+      summary: Get all devices
+      description: |
+        Returns a paginated list of devices with optional filtering.
+
+        ### Фільтрація:
+        - `?room=living` - пристрої в кімнаті living
+        - `?type=light` - пристрої типу light
+        - `?online=true` - тільки онлайн пристрої
+        - `?state.on=true` - увімкнені пристрої
+        - `?temperature_gt=22` - температура більше 22°C
+        - `?createdAt_gte=2026-03-01` - створені після 2026-03-01
+
+        ### Сортування:
+        - `?sort=name` - за іменем (А-Я)
+        - `?sort=-createdAt` - за датою (новіші перші)
+        - `?sort=room,-name` - за кімнатою, потім за іменем (спадання)
+      operationId: getDevices
+      parameters:
+        - name: room
+          in: query
+          description: Filter by room name
+          required: false
+          schema:
+            type: string
+            example: living
+        - name: type
+          in: query
+          description: Filter by device type
+          required: false
+          schema:
+            type: string
+            enum:
+              [
+                light,
+                thermostat,
+                motion_sensor,
+                door,
+                camera,
+                sonos_speaker,
+                outlet,
+                switch,
+              ]
+            example: light
+        - name: online
+          in: query
+          description: Filter by online status
+          required: false
+          schema:
+            type: boolean
+            example: true
+        - name: search
+          in: query
+          description: Search by device name or manufacturer
+          required: false
+          schema:
+            type: string
+            example: philips
+        - name: temperature_gt
+          in: query
+          description: Temperature greater than (for thermostats)
+          required: false
+          schema:
+            type: number
+            format: float
+            example: 22.5
+        - name: temperature_lt
+          in: query
+          description: Temperature less than
+          required: false
+          schema:
+            type: number
+            format: float
+        - name: brightness_gt
+          in: query
+          description: Brightness greater than (for lights)
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 100
+        - name: createdAt_gte
+          in: query
+          description: Created after date
+          required: false
+          schema:
+            type: string
+            format: date
+            example: 2026-03-01
+        - name: createdAt_lte
+          in: query
+          description: Created before date
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: sort
+          in: query
+          description: |
+            Sort fields. Prefix with '-' for descending order.
+            Multiple fields separated by commas.
+          required: false
+          schema:
+            type: string
+            example: "-createdAt,name"
+        - name: page
+          in: query
+          description: Page number (1-based)
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+            example: 1
+        - name: limit
+          in: query
+          description: Number of items per page (max 100)
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+            example: 20
+      responses:
+        "200":
+          description: Successful operation
+          headers:
+            X-Total-Count:
+              description: Total number of items
+              schema:
+                type: integer
+                example: 97
+            X-RateLimit-Limit:
+              description: Rate limit per hour
+              schema:
+                type: integer
+                example: 1000
+            X-RateLimit-Remaining:
+              description: Remaining requests
+              schema:
+                type: integer
+                example: 995
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - ok
+                  - data
+                  - pagination
+                properties:
+                  ok:
+                    type: boolean
+                    description: Operation success status
+                    example: true
+                  data:
+                    type: array
+                    description: Array of devices
+                    items:
+                      $ref: "#/components/schemas/Device"
+                  pagination:
+                    type: object
+                    description: Pagination metadata
+                    required:
+                      - page
+                      - limit
+                      - totalPages
+                      - totalItems
+                      - hasNextPage
+                      - hasPrevPage
+                    properties:
+                      page:
+                        type: integer
+                        description: Current page number
+                        example: 2
+                      limit:
+                        type: integer
+                        description: Items per page
+                        example: 20
+                      totalPages:
+                        type: integer
+                        description: Total number of pages
+                        example: 5
+                      totalItems:
+                        type: integer
+                        description: Total number of items
+                        example: 97
+                      hasNextPage:
+                        type: boolean
+                        description: Whether there is a next page
+                        example: true
+                      hasPrevPage:
+                        type: boolean
+                        description: Whether there is a previous page
+                        example: true
+                      nextPage:
+                        type: integer
+                        description: Next page number (if available)
+                        example: 3
+                      prevPage:
+                        type: integer
+                        description: Previous page number (if available)
+                        example: 1
+                  links:
+                    type: object
+                    description: HATEOAS links for navigation
+                    properties:
+                      self:
+                        type: string
+                        example: "/devices?page=2&limit=20"
+                      first:
+                        type: string
+                        example: "/devices?page=1&limit=20"
+                      prev:
+                        type: string
+                        example: "/devices?page=1&limit=20"
+                      next:
+                        type: string
+                        example: "/devices?page=3&limit=20"
+                      last:
+                        type: string
+                        example: "/devices?page=5&limit=20"
+        "400":
+          description: Invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                ok: false
+                error: "invalid_parameter"
+                message: "Invalid value for parameter 'limit'. Maximum is 100."
+                timestamp: "2026-03-02T14:30:00Z"
+                requestId: "req-123abc-456def"
+        "401":
+          description: Unauthorized - missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Too many requests
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+    post:
+      tags:
+        - Devices
+      summary: Create a new device
+      description: Creates a new device and returns the created resource
+      operationId: createDevice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDeviceRequest"
+            examples:
+              light:
+                summary: Create a light
+                value:
+                  name: "Kitchen Light"
+                  deviceType: "light"
+                  room: "kitchen"
+                  manufacturer: "Philips"
+                  model: "Hue White"
+                  initialState:
+                    on: false
+                    brightness: 0
+              thermostat:
+                summary: Create a thermostat
+                value:
+                  name: "Living Room Thermostat"
+                  deviceType: "thermostat"
+                  room: "living"
+                  manufacturer: "Nest"
+                  model: "Learning Thermostat"
+                  initialState:
+                    mode: "auto"
+                    temperature: 22.5
+      responses:
+        "201":
+          description: Device created successfully
+          headers:
+            Location:
+              description: URL of the created device
+              schema:
+                type: string
+                example: "/devices/550e8400-e29b-41d4-a716-446655440000"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/Device"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Conflict - device with same name already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Unprocessable entity - invalid device type or room
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /devices/{deviceId}:
+    get:
+      tags:
+        - Devices
+      summary: Get device by ID
+      description: Returns a single device by its unique identifier
+      operationId: getDeviceById
+      parameters:
+        - name: deviceId
+          in: path
+          description: Device UUID
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: "550e8400-e29b-41d4-a716-446655440000"
+      responses:
+        "200":
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/Device"
+        "404":
+          description: Device not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                ok: false
+                error: "device_not_found"
+                message: "Device with ID 550e8400-e29b-41d4-a716-446655440000 not found"
+                timestamp: "2026-03-02T14:30:00Z"
+                requestId: "req-123abc-456def"
+
+    put:
+      tags:
+        - Devices
+      summary: Update a device
+      description: Fully updates an existing device
+      operationId: updateDevice
+      parameters:
+        - name: deviceId
+          in: path
+          description: Device UUID
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateDeviceRequest"
+      responses:
+        "200":
+          description: Device updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/Device"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "404":
+          description: Device not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Conflict - device state conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+    patch:
+      tags:
+        - Devices
+      summary: Partially update a device
+      description: Updates specific fields of an existing device
+      operationId: patchDevice
+      parameters:
+        - name: deviceId
+          in: path
+          description: Device UUID
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: Device name
+                room:
+                  type: string
+                  description: Room name
+                state:
+                  type: object
+                  description: Device state updates
+                  additionalProperties: true
+            examples:
+              updateName:
+                summary: Update device name
+                value:
+                  name: "New Light Name"
+              updateState:
+                summary: Update device state
+                value:
+                  state:
+                    brightness: 75
+                    on: true
+      responses:
+        "200":
+          description: Device updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/Device"
+        "404":
+          description: Device not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+    delete:
+      tags:
+        - Devices
+      summary: Delete a device
+      description: Deletes an existing device
+      operationId: deleteDevice
+      parameters:
+        - name: deviceId
+          in: path
+          description: Device UUID
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: permanent
+          in: query
+          description: Permanent deletion (bypass soft-delete)
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "204":
+          description: Device deleted successfully (no content)
+        "404":
+          description: Device not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /devices/{deviceId}/commands:
+    post:
+      tags:
+        - Device Commands
+      summary: Execute device command (RPC-style)
+      description: |
+        Executes a command on a specific device.
+
+        ### Доступні команди за типом пристрою:
+
+        **Світло (light):**
+        - `turn_on` - увімкнути
+        - `turn_off` - вимкнути
+        - `set_brightness` - встановити яскравість (params: `{"value": 50}`)
+        - `set_color` - встановити колір (params: `{"color": "#FF5733"}`)
+
+        **Термостат (thermostat):**
+        - `set_temperature` - встановити температуру (params: `{"value": 22.5}`)
+        - `set_mode` - встановити режим (params: `{"mode": "cooling"}`)
+
+        **Двері/замок (door):**
+        - `lock` - зачинити
+        - `unlock` - відчинити
+
+        **Sonos колонка (sonos_speaker):**
+        - `play` - відтворювати
+        - `pause` - пауза
+        - `next` - наступний трек
+        - `previous` - попередній трек
+        - `set_volume` - встановити гучність (params: `{"value": 30}`)
+      operationId: executeDeviceCommand
+      parameters:
+        - name: deviceId
+          in: path
+          description: Device UUID
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeviceCommand"
+            examples:
+              turnOn:
+                summary: Turn on a light
+                value:
+                  command: "turn_on"
+              setBrightness:
+                summary: Set brightness
+                value:
+                  command: "set_brightness"
+                  params:
+                    value: 75
+              setTemperature:
+                summary: Set thermostat temperature
+                value:
+                  command: "set_temperature"
+                  params:
+                    value: 23.5
+              lock:
+                summary: Lock door
+                value:
+                  command: "lock"
+              playMusic:
+                summary: Play music on Sonos
+                value:
+                  command: "play"
+                  params:
+                    playlist: "Rock Classics"
+                    volume: 40
+      responses:
+        "200":
+          description: Command executed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/Device"
+                  message:
+                    type: string
+                    example: "Command 'turn_on' executed successfully"
+        "400":
+          description: Invalid command or parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                ok: false
+                error: "invalid_command"
+                message: "Command 'set_brightness' not supported for device type 'door'"
+                timestamp: "2026-03-02T14:30:00Z"
+                requestId: "req-123abc-456def"
+        "404":
+          description: Device not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Device offline or busy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                ok: false
+                error: "device_offline"
+                message: "Device is currently offline"
+                timestamp: "2026-03-02T14:30:00Z"
+                requestId: "req-123abc-456def"
+                details:
+                  lastSeen: "2026-03-02T10:15:00Z"
+        "422":
+          description: Command parameters out of range
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                ok: false
+                error: "parameter_out_of_range"
+                message: "Brightness must be between 0 and 100"
+                timestamp: "2026-03-02T14:30:00Z"
+                requestId: "req-123abc-456def"
+                details:
+                  field: "brightness"
+                  min: 0
+                  max: 100
+                  received: 150
+
+  /rooms/{roomName}/devices:
+    get:
+      tags:
+        - Rooms
+      summary: Get devices by room
+      description: Returns all devices in a specific room
+      operationId: getDevicesByRoom
+      parameters:
+        - name: roomName
+          in: path
+          description: Room name
+          required: true
+          schema:
+            type: string
+            enum:
+              [
+                living,
+                bedroom,
+                kitchen,
+                bathroom,
+                hallway,
+                guest,
+                office,
+                dining,
+                garage,
+              ]
+            example: living
+        - name: type
+          in: query
+          description: Filter by device type
+          required: false
+          schema:
+            type: string
+            enum:
+              [light, thermostat, motion_sensor, door, camera, sonos_speaker]
+        - name: online
+          in: query
+          description: Filter by online status
+          required: false
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Device"
+                  count:
+                    type: integer
+                    example: 3
+        "404":
+          description: Room not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /devices/types/{deviceType}:
+    get:
+      tags:
+        - Devices
+      summary: Get devices by type
+      description: Returns all devices of a specific type
+      operationId: getDevicesByType
+      parameters:
+        - name: deviceType
+          in: path
+          description: Device type
+          required: true
+          schema:
+            type: string
+            enum:
+              [
+                light,
+                thermostat,
+                motion_sensor,
+                door,
+                camera,
+                sonos_speaker,
+                outlet,
+                switch,
+              ]
+            example: light
+      responses:
+        "200":
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Device"
+                  count:
+                    type: integer
+                    example: 5
+
+  /devices/online:
+    get:
+      tags:
+        - Devices
+      summary: Get online devices
+      description: Returns all currently online devices
+      operationId: getOnlineDevices
+      responses:
+        "200":
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Device"
+                  count:
+                    type: integer
+                    example: 8
+
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Health check endpoint
+      description: Returns service health status
+      operationId: healthCheck
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [UP, DOWN]
+                    example: "UP"
+                  version:
+                    type: string
+                    example: "1.0.0"
+                  timestamp:
+                    type: string
+                    format: date-time
+                    example: "2026-03-02T14:30:00Z"
+                  services:
+                    type: object
+                    properties:
+                      database:
+                        type: string
+                        enum: [UP, DOWN]
+                        example: "UP"
+                      kafka:
+                        type: string
+                        enum: [UP, DOWN]
+                        example: "UP"
+
+components:
+  schemas:
+    Device:
+      type: object
+      description: Smart home device
+      required:
+        - deviceId
+        - name
+        - deviceType
+        - room
+        - isOnline
+      properties:
+        deviceId:
+          type: string
+          format: uuid
+          description: Unique device identifier
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        name:
+          type: string
+          description: Device display name
+          example: "Living Room Light"
+          minLength: 2
+          maxLength: 100
+        deviceType:
+          type: string
+          description: Type of device
+          enum:
+            [
+              light,
+              thermostat,
+              motion_sensor,
+              door,
+              camera,
+              sonos_speaker,
+              outlet,
+              switch,
+            ]
+          example: "light"
+        room:
+          type: string
+          description: Room where device is located
+          example: "living"
+        manufacturer:
+          type: string
+          description: Device manufacturer
+          example: "Philips"
+        model:
+          type: string
+          description: Device model
+          example: "Hue White 2.0"
+        firmwareVersion:
+          type: string
+          description: Firmware version
+          example: "1.2.3"
+        state:
+          type: object
+          description: Current device state (varies by device type)
+          additionalProperties: true
+          example:
+            on: true
+            brightness: 60
+            color: "#FF5733"
+        capabilities:
+          type: object
+          description: Device capabilities
+          additionalProperties: true
+          example:
+            supportsColor: true
+            supportsBrightness: true
+            supportsSchedules: true
+        isOnline:
+          type: boolean
+          description: Whether device is currently online
+          example: true
+        lastSeen:
+          type: string
+          format: date-time
+          description: Last time device communicated with server
+          example: "2026-03-02T14:28:00Z"
+        addedAt:
+          type: string
+          format: date-time
+          description: When device was added to system
+          example: "2026-01-15T10:00:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          description: When device was last updated
+          example: "2026-03-01T09:15:00Z"
+        tags:
+          type: array
+          description: User-defined tags for device
+          items:
+            type: string
+          example: ["favorite", "energy-saving"]
+
+    CreateDeviceRequest:
+      type: object
+      description: Request to create a new device
+      required:
+        - name
+        - deviceType
+        - room
+      properties:
+        name:
+          type: string
+          description: Device name
+          example: "Kitchen Light"
+          minLength: 2
+          maxLength: 100
+        deviceType:
+          type: string
+          description: Device type
+          enum:
+            [
+              light,
+              thermostat,
+              motion_sensor,
+              door,
+              camera,
+              sonos_speaker,
+              outlet,
+              switch,
+            ]
+          example: "light"
+        room:
+          type: string
+          description: Room name
+          example: "kitchen"
+        manufacturer:
+          type: string
+          description: Device manufacturer
+          example: "Philips"
+        model:
+          type: string
+          description: Device model
+          example: "Hue White"
+        initialState:
+          type: object
+          description: Initial device state
+          additionalProperties: true
+          example:
+            on: false
+            brightness: 0
+        metadata:
+          type: object
+          description: Additional metadata
+          additionalProperties: true
+          example:
+            purchaseDate: "2026-01-10"
+            warrantyUntil: "2027-01-10"
+
+    UpdateDeviceRequest:
+      type: object
+      description: Request to update a device
+      properties:
+        name:
+          type: string
+          description: Device name
+          example: "Updated Light Name"
+        room:
+          type: string
+          description: Room name
+          example: "living"
+        manufacturer:
+          type: string
+          description: Device manufacturer
+        model:
+          type: string
+          description: Device model
+        firmwareVersion:
+          type: string
+          description: Firmware version
+        tags:
+          type: array
+          items:
+            type: string
+          description: User-defined tags
+
+    DeviceCommand:
+      type: object
+      description: RPC-style command for device
+      required:
+        - command
+      properties:
+        command:
+          type: string
+          description: Command to execute
+          enum:
+            [
+              turn_on,
+              turn_off,
+              set_brightness,
+              set_color,
+              set_temperature,
+              set_mode,
+              lock,
+              unlock,
+              play,
+              pause,
+              next,
+              previous,
+              set_volume,
+            ]
+          example: "set_brightness"
+        params:
+          type: object
+          description: Command parameters
+          additionalProperties: true
+          example:
+            value: 75
+        waitForResponse:
+          type: boolean
+          description: Whether to wait for command execution result
+          default: true
+          example: true
+
+    Error:
+      type: object
+      description: Error response
+      required:
+        - ok
+        - error
+        - message
+        - timestamp
+        - requestId
+      properties:
+        ok:
+          type: boolean
+          description: Operation success status
+          enum: [false]
+          example: false
+        error:
+          type: string
+          description: Error code
+          enum:
+            [
+              invalid_parameter,
+              missing_field,
+              invalid_field_type,
+              device_not_found,
+              unauthorized,
+              forbidden,
+              device_offline,
+              invalid_command,
+              parameter_out_of_range,
+              conflict,
+              internal_server_error,
+              too_many_requests,
+              service_unavailable,
+            ]
+          example: "device_not_found"
+        message:
+          type: string
+          description: Human-readable error message
+          example: "Device not found"
+        timestamp:
+          type: string
+          format: date-time
+          description: Error timestamp
+          example: "2026-03-02T14:30:00Z"
+        requestId:
+          type: string
+          description: Unique request ID for tracking
+          example: "req-123abc-456def"
+        details:
+          type: object
+          description: Additional error details
+          additionalProperties: true
+          example:
+            deviceId: "550e8400-e29b-41d4-a716-446655440000"
+
+    ValidationError:
+      allOf:
+        - $ref: "#/components/schemas/Error"
+        - type: object
+          properties:
+            details:
+              type: object
+              properties:
+                fields:
+                  type: array
+                  description: List of validation errors
+                  items:
+                    type: object
+                    properties:
+                      field:
+                        type: string
+                        example: "name"
+                      code:
+                        type: string
+                        enum: [required, minLength, maxLength, pattern, type]
+                        example: "required"
+                      message:
+                        type: string
+                        example: "Name is required"
+                      received:
+                        type: object
+                        description: Received value
+                      expected:
+                        type: object
+                        description: Expected value/type
+                totalErrors:
+                  type: integer
+                  example: 2
+
+    Pagination:
+      type: object
+      description: Pagination metadata
+      properties:
+        page:
+          type: integer
+          example: 2
+        limit:
+          type: integer
+          example: 20
+        totalPages:
+          type: integer
+          example: 5
+        totalItems:
+          type: integer
+          example: 97
+        hasNextPage:
+          type: boolean
+          example: true
+        hasPrevPage:
+          type: boolean
+          example: true
+        nextPage:
+          type: integer
+          example: 3
+        prevPage:
+          type: integer
+          example: 1
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT token obtained from authentication service.
+
+        Format: `Bearer <token>`
+
+        Example: `Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...`
+
+  parameters:
+    deviceIdPath:
+      name: deviceId
+      in: path
+      description: Device UUID
+      required: true
+      schema:
+        type: string
+        format: uuid
+    pageParam:
+      name: page
+      in: query
+      description: Page number (1-based)
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    limitParam:
+      name: limit
+      in: query
+      description: Items per page (max 100)
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+
+  responses:
+    UnauthorizedError:
+      description: Authentication information is missing or invalid
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    ForbiddenError:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFoundError:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    TooManyRequestsError:
+      description: Rate limit exceeded
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+  examples:
+    LightDevice:
+      summary: Light device example
+      value:
+        deviceId: "550e8400-e29b-41d4-a716-446655440000"
+        name: "Living Room Light"
+        deviceType: "light"
+        room: "living"
+        manufacturer: "Philips"
+        model: "Hue White 2.0"
+        state:
+          on: true
+          brightness: 60
+          color: "#FF5733"
+        capabilities:
+          supportsColor: true
+          supportsBrightness: true
+        isOnline: true
+        lastSeen: "2026-03-02T14:28:00Z"
+        addedAt: "2026-01-15T10:00:00Z"
+
+    ThermostatDevice:
+      summary: Thermostat device example
+      value:
+        deviceId: "660e8400-e29b-41d4-a716-446655440001"
+        name: "Bedroom Thermostat"
+        deviceType: "thermostat"
+        room: "bedroom"
+        manufacturer: "Nest"
+        model: "Learning Thermostat"
+        state:
+          mode: "cooling"
+          temperature: 22.5
+          targetTemperature: 23.0
+          humidity: 45
+        capabilities:
+          supportsCooling: true
+          supportsHeating: true
+          minTemp: 16
+          maxTemp: 30
+        isOnline: true
+        lastSeen: "2026-03-02T14:29:00Z"
+        addedAt: "2026-01-10T11:00:00Z"
