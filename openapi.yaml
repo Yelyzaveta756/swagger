@@ -1432,7 +1432,7 @@ components:
         name:
           type: string
           description: Room name
-          example: "Вітальня"
+          example: "Living"
           minLength: 2
           maxLength: 100
         floor:
@@ -1642,108 +1642,3 @@ components:
         Format: `Bearer <token>`
 
         Example: `Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...`
-
-  parameters:
-    device_idPath:
-      name: device_id
-      in: path
-      description: Device UUID
-      required: true
-      schema:
-        type: string
-        format: uuid
-    pageParam:
-      name: page
-      in: query
-      description: Page number (1-based)
-      required: false
-      schema:
-        type: integer
-        minimum: 1
-        default: 1
-    limitParam:
-      name: limit
-      in: query
-      description: Items per page (max 100)
-      required: false
-      schema:
-        type: integer
-        minimum: 1
-        maximum: 100
-        default: 20
-
-  responses:
-    UnauthorizedError:
-      description: Authentication information is missing or invalid
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/Error"
-    ForbiddenError:
-      description: Insufficient permissions
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/Error"
-    NotFoundError:
-      description: Resource not found
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/Error"
-    TooManyRequestsError:
-      description: Rate limit exceeded
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/Error"
-    InternalServerError:
-      description: Internal server error
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/Error"
-
-  examples:
-    LightDevice:
-      summary: Light device example
-      value:
-        device_id: "550e8400-e29b-41d4-a716-446655440000"
-        name: "Living Room Light"
-        device_type: "light"
-        room_id: "550e8400-e29b-41d4-a716-446655440000"
-        manufacturer: "Philips"
-        model: "Hue White 2.0"
-        state:
-          on: true
-          brightness: 60
-          color: "#FF5733"
-        capabilities:
-          supportsColor: true
-          supportsBrightness: true
-        is_online: true
-        last_seen: "2026-03-02T14:28:00Z"
-        added_at: "2026-01-15T10:00:00Z"
-
-    ThermostatDevice:
-      summary: Thermostat device example
-      value:
-        device_id: "660e8400-e29b-41d4-a716-446655440001"
-        name: "Bedroom Thermostat"
-        device_type: "thermostat"
-        room_id: "550e8400-e29b-41d4-a716-446655440007"
-        manufacturer: "Nest"
-        model: "Learning Thermostat"
-        state:
-          mode: "cooling"
-          temperature: 22.5
-          targetTemperature: 23.0
-          humidity: 45
-        capabilities:
-          supportsCooling: true
-          supportsHeating: true
-          minTemp: 16
-          maxTemp: 30
-        is_online: true
-        last_seen: "2026-03-02T14:29:00Z"
-        added_at: "2026-01-10T11:00:00Z"
