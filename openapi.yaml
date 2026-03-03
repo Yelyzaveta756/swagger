@@ -33,7 +33,7 @@ info:
     ### 4. Параметри запитів
     - **Пагінація**: `page`, `limit` (max 100)
 
-    - **Фільтрація**: query параметри (`?room=living&type=light`)
+    - **Фільтрація**: query параметри (`?room_id=550e8400-e29b-41d4-a716-4466554400322&type=light`)
     - **Оператори фільтрації**: `_gt`, `_lt`, `_gte`, `_lte`, `_ne`, `_in`
     - **Сортування**: `sort=field` (зростання), `sort=-field` (спадання)
     - **Пошук**: `search=text`
@@ -980,19 +980,19 @@ paths:
               living_room:
                 summary: Create a living room
                 value:
-                  name: "Вітальня"
+                  name: "Living room"
                   floor: 1
                   room_type: "living"
               bedroom:
                 summary: Create a bedroom
                 value:
-                  name: "Спальня"
+                  name: "Bedroom"
                   floor: 2
                   room_type: "bedroom"
               guest_room:
                 summary: Create a guest room
                 value:
-                  name: "Гостьова кімната"
+                  name: "Guest room 1"
                   floor: 1
                   room_type: "guest"
       responses:
