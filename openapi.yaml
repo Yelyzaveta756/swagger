@@ -17,10 +17,10 @@ info:
     ### 2. Організація API та Ресурси
     - **Ресурси як іменники**: `/devices`, `/rooms`, `/types`
 
-    - **Множина для колекцій**: `/devices` (список), `/devices/{id}` (конкретний)
-    - **Kebab-case для складних назв**: `/energy-savings-mode`
-    - **Ієрархія ресурсів**: `/rooms/{roomId}/devices`
-    - **RPC-стиль для команд**: `/devices/{id}/commands`
+    - **Множина для колекцій**: `/devices` (список), `/devices/{device_id}` (конкретний)
+    - **Snake_case для параметрів та полів**: `user_id`, `device_type`, `is_online`, `created_at`
+    - **Ієрархія ресурсів**: `/rooms/{room_id}/devices`
+    - **RPC-стиль для команд**: `/devices/{device_id}/commands`
 
     ### 3. HTTP Методи
     - `GET` - отримання ресурсу/списку
@@ -87,8 +87,6 @@ tags:
     description: RPC-style commands for devices
   - name: Rooms
     description: Room-based device operations
-  - name: Health
-    description: Service health checks
 
 paths:
   /devices:
@@ -100,27 +98,37 @@ paths:
         Returns a paginated list of devices with optional filtering.
 
         ### Фільтрація:
-        - `?room=living` - пристрої в кімнаті living
+
+        - `?room_id=550e8400-e29b-41d4-a716-4466554400322` - пристрої в кімнаті (ідентифікатор)
+
         - `?type=light` - пристрої типу light
-        - `?online=true` - тільки онлайн пристрої
+
+        - `?is_online=true` - тільки онлайн пристрої
+
         - `?state.on=true` - увімкнені пристрої
+
         - `?temperature_gt=22` - температура більше 22°C
-        - `?createdAt_gte=2026-03-01` - створені після 2026-03-01
+
+        - `?created_at_gte=2026-03-01` - створені після 2026-03-01
 
         ### Сортування:
+
         - `?sort=name` - за іменем (А-Я)
-        - `?sort=-createdAt` - за датою (новіші перші)
-        - `?sort=room,-name` - за кімнатою, потім за іменем (спадання)
+
+        - `?sort=-created_at` - за датою (новіші перші)
+
+        - `?sort=room_id,-name` - за кімнатою, потім за іменем (спадання)
       operationId: getDevices
       parameters:
-        - name: room
+        - name: room_id
           in: query
-          description: Filter by room name
+          description: Filter by room identifier
           required: false
           schema:
             type: string
-            example: living
-        - name: type
+            format: uuid
+            example: 550e8400-e29b-41d4-a716-446655440032
+        - name: device_type
           in: query
           description: Filter by device type
           required: false
@@ -138,7 +146,7 @@ paths:
                 switch,
               ]
             example: light
-        - name: online
+        - name: is_online
           in: query
           description: Filter by online status
           required: false
@@ -175,7 +183,7 @@ paths:
             type: integer
             minimum: 0
             maximum: 100
-        - name: createdAt_gte
+        - name: created_at_gte
           in: query
           description: Created after date
           required: false
@@ -183,7 +191,7 @@ paths:
             type: string
             format: date
             example: 2026-03-01
-        - name: createdAt_lte
+        - name: created_at_lte
           in: query
           description: Created before date
           required: false
@@ -198,7 +206,7 @@ paths:
           required: false
           schema:
             type: string
-            example: "-createdAt,name"
+            example: "-created_at,name"
         - name: page
           in: query
           description: Page number (1-based)
@@ -328,7 +336,7 @@ paths:
                 error: "invalid_parameter"
                 message: "Invalid value for parameter 'limit'. Maximum is 100."
                 timestamp: "2026-03-02T14:30:00Z"
-                requestId: "req-123abc-456def"
+                request_id: "req-123abc-456def"
         "401":
           description: Unauthorized - missing or invalid token
           content:
@@ -365,22 +373,22 @@ paths:
                 summary: Create a light
                 value:
                   name: "Kitchen Light"
-                  deviceType: "light"
-                  room: "kitchen"
+                  device_type: "light"
+                  room_id: "550e8400-e29b-41d4-a716-446655440032"
                   manufacturer: "Philips"
                   model: "Hue White"
-                  initialState:
+                  state:
                     on: false
                     brightness: 0
               thermostat:
                 summary: Create a thermostat
                 value:
                   name: "Living Room Thermostat"
-                  deviceType: "thermostat"
-                  room: "living"
+                  device_type: "thermostat"
+                  room_id: "550e8400-e29b-41d4-a716-446655440042"
                   manufacturer: "Nest"
                   model: "Learning Thermostat"
-                  initialState:
+                  state:
                     mode: "auto"
                     temperature: 22.5
       responses:
@@ -433,7 +441,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
-  /devices/{deviceId}:
+  /devices/{device_id}:
     get:
       tags:
         - Devices
@@ -441,7 +449,7 @@ paths:
       description: Returns a single device by its unique identifier
       operationId: getDeviceById
       parameters:
-        - name: deviceId
+        - name: device_id
           in: path
           description: Device UUID
           required: true
@@ -473,7 +481,7 @@ paths:
                 error: "device_not_found"
                 message: "Device with ID 550e8400-e29b-41d4-a716-446655440000 not found"
                 timestamp: "2026-03-02T14:30:00Z"
-                requestId: "req-123abc-456def"
+                request_id: "req-123abc-456def"
 
     put:
       tags:
@@ -482,7 +490,7 @@ paths:
       description: Fully updates an existing device
       operationId: updateDevice
       parameters:
-        - name: deviceId
+        - name: device_id
           in: path
           description: Device UUID
           required: true
@@ -534,7 +542,7 @@ paths:
       description: Updates specific fields of an existing device
       operationId: patchDevice
       parameters:
-        - name: deviceId
+        - name: device_id
           in: path
           description: Device UUID
           required: true
@@ -551,15 +559,16 @@ paths:
                 name:
                   type: string
                   description: Device name
-                room:
+                room_id:
                   type: string
-                  description: Room name
+
+                  description: Room identifier
                 state:
                   type: object
                   description: Device state updates
                   additionalProperties: true
             examples:
-              updateName:
+              update_name:
                 summary: Update device name
                 value:
                   name: "New Light Name"
@@ -596,7 +605,7 @@ paths:
       description: Deletes an existing device
       operationId: deleteDevice
       parameters:
-        - name: deviceId
+        - name: device_id
           in: path
           description: Device UUID
           required: true
@@ -620,7 +629,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
-  /devices/{deviceId}/commands:
+  /devices/{device_id}/commands:
     post:
       tags:
         - Device Commands
@@ -631,28 +640,42 @@ paths:
         ### Доступні команди за типом пристрою:
 
         **Світло (light):**
+
         - `turn_on` - увімкнути
+
         - `turn_off` - вимкнути
+
         - `set_brightness` - встановити яскравість (params: `{"value": 50}`)
+
         - `set_color` - встановити колір (params: `{"color": "#FF5733"}`)
 
         **Термостат (thermostat):**
+
         - `set_temperature` - встановити температуру (params: `{"value": 22.5}`)
+
         - `set_mode` - встановити режим (params: `{"mode": "cooling"}`)
 
         **Двері/замок (door):**
+
         - `lock` - зачинити
+
         - `unlock` - відчинити
 
         **Sonos колонка (sonos_speaker):**
+
         - `play` - відтворювати
+
         - `pause` - пауза
+
         - `next` - наступний трек
+
         - `previous` - попередній трек
+
         - `set_volume` - встановити гучність (params: `{"value": 30}`)
+
       operationId: executeDeviceCommand
       parameters:
-        - name: deviceId
+        - name: device_id
           in: path
           description: Device UUID
           required: true
@@ -720,7 +743,7 @@ paths:
                 error: "invalid_command"
                 message: "Command 'set_brightness' not supported for device type 'door'"
                 timestamp: "2026-03-02T14:30:00Z"
-                requestId: "req-123abc-456def"
+                request_id: "req-123abc-456def"
         "404":
           description: Device not found
           content:
@@ -738,9 +761,9 @@ paths:
                 error: "device_offline"
                 message: "Device is currently offline"
                 timestamp: "2026-03-02T14:30:00Z"
-                requestId: "req-123abc-456def"
+                request_id: "req-123abc-456def"
                 details:
-                  lastSeen: "2026-03-02T10:15:00Z"
+                  last_seen: "2026-03-02T10:15:00Z"
         "422":
           description: Command parameters out of range
           content:
@@ -752,25 +775,42 @@ paths:
                 error: "parameter_out_of_range"
                 message: "Brightness must be between 0 and 100"
                 timestamp: "2026-03-02T14:30:00Z"
-                requestId: "req-123abc-456def"
+                request_id: "req-123abc-456def"
                 details:
                   field: "brightness"
                   min: 0
                   max: 100
                   received: 150
 
-  /rooms/{roomName}/devices:
+  /rooms:
     get:
       tags:
         - Rooms
-      summary: Get devices by room
-      description: Returns all devices in a specific room
-      operationId: getDevicesByRoom
+      summary: Get all rooms
+      description: |
+        Returns a paginated list of rooms with optional filtering.
+
+        ### Фільтрація:
+
+        - `?room_type=bedroom` - кімнати за типом
+
+        - `?floor=2` - кімнати на конкретному поверсі
+
+        - `?owner_id=550e8400-e29b-41d4-a716-446655440000` - кімнати конкретного власника
+
+        ### Сортування:
+
+        - `?sort=name` - за назвою (А-Я)
+
+        - `?sort=-created_at` - за датою створення (новіші перші)
+
+        - `?sort=floor,name` - за поверхом, потім за назвою
+      operationId: getRooms
       parameters:
-        - name: roomName
-          in: path
-          description: Room name
-          required: true
+        - name: room_type
+          in: query
+          description: Filter by room type
+          required: false
           schema:
             type: string
             enum:
@@ -784,22 +824,243 @@ paths:
                 office,
                 dining,
                 garage,
+                laundry,
+                basement,
+                attic,
               ]
-            example: living
-        - name: type
+            example: bedroom
+        - name: floor
           in: query
-          description: Filter by device type
+          description: Filter by floor number
+          required: false
+          schema:
+            type: integer
+            minimum: -2
+            maximum: 100
+            example: 2
+        - name: owner_id
+          in: query
+          description: Filter by owner UUID
           required: false
           schema:
             type: string
-            enum:
-              [light, thermostat, motion_sensor, door, camera, sonos_speaker]
-        - name: online
+            format: uuid
+            example: "550e8400-e29b-41d4-a716-446655440000"
+        - name: search
           in: query
-          description: Filter by online status
+          description: Search by room name
           required: false
           schema:
-            type: boolean
+            type: string
+            example: "living"
+        - name: sort
+          in: query
+          description: |
+            Sort fields. Prefix with '-' for descending order.
+            Multiple fields separated by commas.
+          required: false
+          schema:
+            type: string
+            example: "floor,name"
+        - name: page
+          in: query
+          description: Page number (1-based)
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+            example: 1
+        - name: limit
+          in: query
+          description: Number of items per page (max 100)
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+            example: 20
+      responses:
+        "200":
+          description: Successful operation
+          headers:
+            X-Total-Count:
+              description: Total number of items
+              schema:
+                type: integer
+                example: 25
+            X-RateLimit-Limit:
+              description: Rate limit per hour
+              schema:
+                type: integer
+                example: 1000
+            X-RateLimit-Remaining:
+              description: Remaining requests
+              schema:
+                type: integer
+                example: 995
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - ok
+                  - data
+                  - pagination
+                properties:
+                  ok:
+                    type: boolean
+                    description: Operation success status
+                    example: true
+                  data:
+                    type: array
+                    description: Array of rooms
+                    items:
+                      $ref: "#/components/schemas/Room"
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+                  links:
+                    type: object
+                    description: HATEOAS links for navigation
+                    properties:
+                      self:
+                        type: string
+                        example: "/rooms?page=2&limit=20"
+                      first:
+                        type: string
+                        example: "/rooms?page=1&limit=20"
+                      prev:
+                        type: string
+                        example: "/rooms?page=1&limit=20"
+                      next:
+                        type: string
+                        example: "/rooms?page=3&limit=20"
+                      last:
+                        type: string
+                        example: "/rooms?page=5&limit=20"
+        "400":
+          description: Invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Unauthorized - missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Too many requests
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+    post:
+      tags:
+        - Rooms
+      summary: Create a new room
+      description: Creates a new room and returns the created resource
+      operationId: createRoom
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRoomRequest"
+            examples:
+              living_room:
+                summary: Create a living room
+                value:
+                  name: "Вітальня"
+                  floor: 1
+                  room_type: "living"
+              bedroom:
+                summary: Create a bedroom
+                value:
+                  name: "Спальня"
+                  floor: 2
+                  room_type: "bedroom"
+              guest_room:
+                summary: Create a guest room
+                value:
+                  name: "Гостьова кімната"
+                  floor: 1
+                  room_type: "guest"
+      responses:
+        "201":
+          description: Room created successfully
+          headers:
+            Location:
+              description: URL of the created room
+              schema:
+                type: string
+                example: "/rooms/550e8400-e29b-41d4-a716-446655440100"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/Room"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Conflict - room with same name already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Unprocessable entity - invalid room type or floor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /rooms/{room_id}:
+    get:
+      tags:
+        - Rooms
+      summary: Get room by ID
+      description: Returns a single room by its unique identifier
+      operationId: getRoomById
+      parameters:
+        - name: room_id
+          in: path
+          description: Room UUID
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: "550e8400-e29b-41d4-a716-446655440100"
       responses:
         "200":
           description: Successful operation
@@ -812,12 +1073,58 @@ paths:
                     type: boolean
                     example: true
                   data:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/Device"
-                  count:
-                    type: integer
-                    example: 3
+                    $ref: "#/components/schemas/Room"
+        "404":
+          description: Room not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                ok: false
+                error: "room_not_found"
+                message: "Room with ID 550e8400-e29b-41d4-a716-446655440100 not found"
+                timestamp: "2026-03-02T14:30:00Z"
+                request_id: "req-123abc-456def"
+
+    delete:
+      tags:
+        - Rooms
+      summary: Delete a room
+      description: Deletes an existing room
+      operationId: deleteRoom
+      parameters:
+        - name: room_id
+          in: path
+          description: Room UUID
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: force
+          in: query
+          description: Force deletion even if room has devices
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "204":
+          description: Room deleted successfully (no content)
+        "400":
+          description: Bad request - room has devices and force flag not used
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                ok: false
+                error: "room_has_devices"
+                message: "Cannot delete room with existing devices. Use force=true to override."
+                timestamp: "2026-03-02T14:30:00Z"
+                request_id: "req-123abc-456def"
+                details:
+                  device_count: 3
         "404":
           description: Room not found
           content:
@@ -825,32 +1132,60 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
-  /devices/types/{deviceType}:
+  /rooms/{room_id}/devices:
     get:
       tags:
-        - Devices
-      summary: Get devices by type
-      description: Returns all devices of a specific type
-      operationId: getDevicesByType
+        - Rooms
+      summary: Get devices in a room
+      description: Returns all devices located in a specific room
+      operationId: getDevicesInRoom
       parameters:
-        - name: deviceType
+        - name: room_id
           in: path
-          description: Device type
+          description: Room UUID
           required: true
           schema:
             type: string
+            format: uuid
+            example: "550e8400-e29b-41d4-a716-446655440100"
+        - name: device_type
+          in: query
+          description: Filter by device type
+          required: false
+          schema:
+            type: string
             enum:
-              [
-                light,
-                thermostat,
-                motion_sensor,
-                door,
-                camera,
-                sonos_speaker,
-                outlet,
-                switch,
-              ]
-            example: light
+              [light, thermostat, motion_sensor, door, camera, sonos_speaker]
+        - name: is_online
+          in: query
+          description: Filter by online status
+          required: false
+          schema:
+            type: boolean
+        - name: sort
+          in: query
+          description: Sort fields
+          required: false
+          schema:
+            type: string
+            example: "name"
+        - name: page
+          in: query
+          description: Page number (1-based)
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          description: Items per page (max 100)
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
       responses:
         "200":
           description: Successful operation
@@ -866,73 +1201,14 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/Device"
-                  count:
-                    type: integer
-                    example: 5
-
-  /devices/online:
-    get:
-      tags:
-        - Devices
-      summary: Get online devices
-      description: Returns all currently online devices
-      operationId: getOnlineDevices
-      responses:
-        "200":
-          description: Successful operation
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+        "404":
+          description: Room not found
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  ok:
-                    type: boolean
-                    example: true
-                  data:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/Device"
-                  count:
-                    type: integer
-                    example: 8
-
-  /health:
-    get:
-      tags:
-        - Health
-      summary: Health check endpoint
-      description: Returns service health status
-      operationId: healthCheck
-      responses:
-        "200":
-          description: Service is healthy
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    enum: [UP, DOWN]
-                    example: "UP"
-                  version:
-                    type: string
-                    example: "1.0.0"
-                  timestamp:
-                    type: string
-                    format: date-time
-                    example: "2026-03-02T14:30:00Z"
-                  services:
-                    type: object
-                    properties:
-                      database:
-                        type: string
-                        enum: [UP, DOWN]
-                        example: "UP"
-                      kafka:
-                        type: string
-                        enum: [UP, DOWN]
-                        example: "UP"
+                $ref: "#/components/schemas/Error"
 
 components:
   schemas:
@@ -940,13 +1216,14 @@ components:
       type: object
       description: Smart home device
       required:
-        - deviceId
+        - device_id
         - name
-        - deviceType
-        - room
-        - isOnline
+        - device_type
+        - room_id
+        - is_online
+        - added_at
       properties:
-        deviceId:
+        device_id:
           type: string
           format: uuid
           description: Unique device identifier
@@ -957,7 +1234,7 @@ components:
           example: "Living Room Light"
           minLength: 2
           maxLength: 100
-        deviceType:
+        device_type:
           type: string
           description: Type of device
           enum:
@@ -972,10 +1249,10 @@ components:
               switch,
             ]
           example: "light"
-        room:
+        room_id:
           type: string
           description: Room where device is located
-          example: "living"
+          example: "550e8400-e29b-41d4-a716-446655440000"
         manufacturer:
           type: string
           description: Device manufacturer
@@ -984,10 +1261,6 @@ components:
           type: string
           description: Device model
           example: "Hue White 2.0"
-        firmwareVersion:
-          type: string
-          description: Firmware version
-          example: "1.2.3"
         state:
           type: object
           description: Current device state (varies by device type)
@@ -1004,39 +1277,34 @@ components:
             supportsColor: true
             supportsBrightness: true
             supportsSchedules: true
-        isOnline:
+        is_online:
           type: boolean
           description: Whether device is currently online
           example: true
-        lastSeen:
+        last_seen:
           type: string
           format: date-time
           description: Last time device communicated with server
           example: "2026-03-02T14:28:00Z"
-        addedAt:
+        added_at:
           type: string
           format: date-time
           description: When device was added to system
           example: "2026-01-15T10:00:00Z"
-        updatedAt:
+        updated_at:
           type: string
           format: date-time
           description: When device was last updated
           example: "2026-03-01T09:15:00Z"
-        tags:
-          type: array
-          description: User-defined tags for device
-          items:
-            type: string
-          example: ["favorite", "energy-saving"]
 
     CreateDeviceRequest:
       type: object
       description: Request to create a new device
       required:
         - name
-        - deviceType
-        - room
+        - device_type
+        - room_id
+        - state
       properties:
         name:
           type: string
@@ -1044,7 +1312,7 @@ components:
           example: "Kitchen Light"
           minLength: 2
           maxLength: 100
-        deviceType:
+        device_type:
           type: string
           description: Device type
           enum:
@@ -1059,10 +1327,11 @@ components:
               switch,
             ]
           example: "light"
-        room:
+        room_id:
           type: string
-          description: Room name
-          example: "kitchen"
+          format: uuid
+          description: Room UUID
+          example: "550e8400-e29b-41d4-a716-446655440000"
         manufacturer:
           type: string
           description: Device manufacturer
@@ -1071,7 +1340,7 @@ components:
           type: string
           description: Device model
           example: "Hue White"
-        initialState:
+        state:
           type: object
           description: Initial device state
           additionalProperties: true
@@ -1094,24 +1363,17 @@ components:
           type: string
           description: Device name
           example: "Updated Light Name"
-        room:
+        room_id:
           type: string
-          description: Room name
-          example: "living"
+          format: uuid
+          description: Room UUID
+          example: "550e8400-e29b-41d4-a716-446655440000"
         manufacturer:
           type: string
           description: Device manufacturer
         model:
           type: string
           description: Device model
-        firmwareVersion:
-          type: string
-          description: Firmware version
-        tags:
-          type: array
-          items:
-            type: string
-          description: User-defined tags
 
     DeviceCommand:
       type: object
@@ -1151,6 +1413,106 @@ components:
           default: true
           example: true
 
+    Room:
+      type: object
+      description: Room information
+      required:
+        - room_id
+        - name
+        - floor
+        - room_type
+        - owner_id
+        - created_at
+      properties:
+        room_id:
+          type: string
+          format: uuid
+          description: Unique room identifier
+          example: "550e8400-e29b-41d4-a716-446655440100"
+        name:
+          type: string
+          description: Room name
+          example: "Вітальня"
+          minLength: 2
+          maxLength: 100
+        floor:
+          type: integer
+          description: Floor number where room is located
+          minimum: -2
+          maximum: 100
+          example: 1
+        room_type:
+          type: string
+          description: Type of room
+          enum:
+            [
+              living,
+              bedroom,
+              kitchen,
+              bathroom,
+              hallway,
+              guest,
+              office,
+              dining,
+              garage,
+              laundry,
+              basement,
+              attic,
+              other,
+            ]
+          example: "living"
+        owner_id:
+          type: string
+          format: uuid
+          description: Owner UUID who owns this room
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        created_at:
+          type: string
+          format: date-time
+          description: When room was created
+          example: "2026-01-15T10:00:00Z"
+
+    CreateRoomRequest:
+      type: object
+      description: Request to create a new room
+      required:
+        - name
+        - floor
+        - room_type
+      properties:
+        name:
+          type: string
+          description: Room name
+          example: "Living room 1"
+          minLength: 2
+          maxLength: 100
+        floor:
+          type: integer
+          description: Floor number
+          minimum: -2
+          maximum: 100
+          example: 1
+        room_type:
+          type: string
+          description: Type of room
+          enum:
+            [
+              living,
+              bedroom,
+              kitchen,
+              bathroom,
+              hallway,
+              guest,
+              office,
+              dining,
+              garage,
+              laundry,
+              basement,
+              attic,
+              other,
+            ]
+          example: "living"
+
     Error:
       type: object
       description: Error response
@@ -1159,7 +1521,7 @@ components:
         - error
         - message
         - timestamp
-        - requestId
+        - request_id
       properties:
         ok:
           type: boolean
@@ -1195,7 +1557,7 @@ components:
           format: date-time
           description: Error timestamp
           example: "2026-03-02T14:30:00Z"
-        requestId:
+        request_id:
           type: string
           description: Unique request ID for tracking
           example: "req-123abc-456def"
@@ -1204,7 +1566,7 @@ components:
           description: Additional error details
           additionalProperties: true
           example:
-            deviceId: "550e8400-e29b-41d4-a716-446655440000"
+            device_id: "550e8400-e29b-41d4-a716-446655440000"
 
     ValidationError:
       allOf:
@@ -1282,8 +1644,8 @@ components:
         Example: `Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...`
 
   parameters:
-    deviceIdPath:
-      name: deviceId
+    device_idPath:
+      name: device_id
       in: path
       description: Device UUID
       required: true
@@ -1346,10 +1708,10 @@ components:
     LightDevice:
       summary: Light device example
       value:
-        deviceId: "550e8400-e29b-41d4-a716-446655440000"
+        device_id: "550e8400-e29b-41d4-a716-446655440000"
         name: "Living Room Light"
-        deviceType: "light"
-        room: "living"
+        device_type: "light"
+        room_id: "550e8400-e29b-41d4-a716-446655440000"
         manufacturer: "Philips"
         model: "Hue White 2.0"
         state:
@@ -1359,17 +1721,17 @@ components:
         capabilities:
           supportsColor: true
           supportsBrightness: true
-        isOnline: true
-        lastSeen: "2026-03-02T14:28:00Z"
-        addedAt: "2026-01-15T10:00:00Z"
+        is_online: true
+        last_seen: "2026-03-02T14:28:00Z"
+        added_at: "2026-01-15T10:00:00Z"
 
     ThermostatDevice:
       summary: Thermostat device example
       value:
-        deviceId: "660e8400-e29b-41d4-a716-446655440001"
+        device_id: "660e8400-e29b-41d4-a716-446655440001"
         name: "Bedroom Thermostat"
-        deviceType: "thermostat"
-        room: "bedroom"
+        device_type: "thermostat"
+        room_id: "550e8400-e29b-41d4-a716-446655440007"
         manufacturer: "Nest"
         model: "Learning Thermostat"
         state:
@@ -1382,6 +1744,6 @@ components:
           supportsHeating: true
           minTemp: 16
           maxTemp: 30
-        isOnline: true
-        lastSeen: "2026-03-02T14:29:00Z"
-        addedAt: "2026-01-10T11:00:00Z"
+        is_online: true
+        last_seen: "2026-03-02T14:29:00Z"
+        added_at: "2026-01-10T11:00:00Z"
